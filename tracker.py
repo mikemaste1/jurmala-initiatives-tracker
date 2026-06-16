@@ -27,7 +27,26 @@ DATA_DIR = "data"
 CHARTS_DIR = "charts"
 CSV_FILE = os.path.join(DATA_DIR, "initiatives_history.csv")
 STATE_FILE = os.path.join(DATA_DIR, "last_absolute_values.json")
+BASELINE_FILE = os.path.join(DATA_DIR, "launch_baseline.json")
 HTML_FILE = "index.html"
+
+# Define 13 distinguishable styles for the initiatives
+STYLES = [
+    # (color, matplotlib_linestyle, matplotlib_marker, chartjs_borderDash, chartjs_pointStyle)
+    ('#38bdf8', '-', 'o', [], 'circle'),
+    ('#34d399', '--', 's', [6, 4], 'rect'),
+    ('#fb7185', ':', '^', [2, 3], 'triangle'),
+    ('#f472b6', '-.', 'D', [8, 3, 2, 3], 'rectRot'),
+    ('#c084fc', '-', 'v', [], 'triangle'),
+    ('#a78bfa', '--', 'o', [6, 4], 'circle'),
+    ('#818cf8', ':', 's', [2, 3], 'rect'),
+    ('#60a5fa', '-.', '^', [8, 3, 2, 3], 'triangle'),
+    ('#fbbf24', '-', 'D', [], 'rectRot'),
+    ('#fb923c', '--', 'v', [6, 4], 'triangle'),
+    ('#f87171', ':', 'o', [2, 3], 'circle'),
+    ('#a3e635', '-.', 's', [8, 3, 2, 3], 'rect'),
+    ('#2dd4bf', '-', '^', [], 'triangle')
+]
 
 def ensure_directories():
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -42,43 +61,64 @@ def fetch_data():
         print(f"Error fetching data: {e}")
         return None
 
-def load_last_state():
-    if os.path.isfile(STATE_FILE):
+def load_json_file(filepath):
+    if os.path.isfile(filepath):
         try:
-            with open(STATE_FILE, 'r', encoding='utf-8') as f:
+            with open(filepath, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            print(f"Error loading state: {e}")
+            print(f"Error loading {filepath}: {e}")
     return {}
 
-def save_state(state):
+def save_json_file(filepath, data):
     try:
-        with open(STATE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(state, f, indent=2)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
     except Exception as e:
-        print(f"Error saving state: {e}")
+        print(f"Error saving {filepath}: {e}")
 
-def save_to_csv(data, timestamp):
-    file_exists = os.path.isfile(CSV_FILE)
-    last_state = load_last_state()
-    new_state = {}
+def save_to_csv(data, timestamp, reset_baseline=False):
+    ensure_directories()
     
+    # Check if we need to reset/create baseline
+    baseline = {}
+    if not reset_baseline:
+        baseline = load_json_file(BASELINE_FILE)
+        
+    # If baseline is empty (first run or reset), establish it now
+    if not baseline:
+        for project in data:
+            p_id = project.get("id", "")
+            baseline[p_id] = {
+                "name": project.get("name", ""),
+                "votes": project.get("vote_count", 0),
+                "views": project.get("view_count", 0)
+            }
+        save_json_file(BASELINE_FILE, baseline)
+        print("Established new launch baseline.")
+        # If baseline is reset, clear old CSV to prevent mixed sessions
+        if os.path.isfile(CSV_FILE):
+            os.remove(CSV_FILE)
+            
+    file_exists = os.path.isfile(CSV_FILE)
+    new_state = {}
     rows_to_write = []
+    
     for project in data:
         p_id = project.get("id", "")
         name = project.get("name", "")
         curr_votes = project.get("vote_count", 0)
         curr_views = project.get("view_count", 0)
         
-        if p_id in last_state:
-            last_votes = last_state[p_id].get("votes", curr_votes)
-            last_views = last_state[p_id].get("views", curr_views)
-            delta_votes = max(0, curr_votes - last_votes)
-            delta_views = max(0, curr_views - last_views)
-        else:
-            delta_votes = 0
-            delta_views = 0
-            
+        # Calculate delta from tracker launch baseline
+        proj_baseline = baseline.get(p_id, {"votes": curr_votes, "views": curr_views})
+        base_votes = proj_baseline.get("votes", curr_votes)
+        base_views = proj_baseline.get("views", curr_views)
+        
+        delta_votes = max(0, curr_votes - base_votes)
+        delta_views = max(0, curr_views - base_views)
+        
+        # Keep track of latest absolute values for table display
         new_state[p_id] = {
             "name": name,
             "votes": curr_votes,
@@ -101,8 +141,8 @@ def save_to_csv(data, timestamp):
             writer.writerow(["timestamp", "project_id", "project_name", "delta_votes", "delta_views", "state", "is_winner"])
         writer.writerows(rows_to_write)
         
-    save_state(new_state)
-    print(f"Saved delta values for {len(data)} items to CSV at {timestamp}")
+    save_json_file(STATE_FILE, new_state)
+    print(f"Saved delta-from-launch values for {len(data)} items to CSV at {timestamp}")
 
 def generate_static_charts():
     if not os.path.isfile(CSV_FILE):
@@ -113,19 +153,24 @@ def generate_static_charts():
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         df = df.sort_values(by='timestamp')
         
-        initiatives = df['project_name'].unique()
+        initiatives = list(df['project_name'].unique())
         
         plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
         
         # 1. Votes Delta Chart
-        fig, ax = plt.subplots(figsize=(12, 7), layout='constrained')
-        for name in initiatives:
+        fig, ax = plt.subplots(figsize=(14, 8), layout='constrained')
+        for i, name in enumerate(initiatives):
+            style = STYLES[i % len(STYLES)]
             sub_df = df[df['project_name'] == name]
-            ax.plot(sub_df['timestamp'], sub_df['delta_votes'], marker='o', markersize=3, label=name)
+            ax.plot(
+                sub_df['timestamp'], sub_df['delta_votes'], 
+                linestyle=style[1], marker=style[2], color=style[0],
+                markersize=4, linewidth=1.5, label=name
+            )
         
-        ax.set_title("Initiative Vote Growth (Deltas) Over Time", fontsize=14, fontweight='bold', pad=15)
+        ax.set_title("Initiative Vote Increments Since Launch", fontsize=14, fontweight='bold', pad=15)
         ax.set_xlabel("Time", fontsize=11, labelpad=10)
-        ax.set_ylabel("Vote Delta (Growth)", fontsize=11, labelpad=10)
+        ax.set_ylabel("Vote Delta (Growth from Launch)", fontsize=11, labelpad=10)
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d %H:%M'))
         plt.xticks(rotation=30)
         ax.legend(title="Initiatives", bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=9)
@@ -133,21 +178,26 @@ def generate_static_charts():
         plt.close(fig)
         
         # 2. Views Delta Chart
-        fig, ax = plt.subplots(figsize=(12, 7), layout='constrained')
-        for name in initiatives:
+        fig, ax = plt.subplots(figsize=(14, 8), layout='constrained')
+        for i, name in enumerate(initiatives):
+            style = STYLES[i % len(STYLES)]
             sub_df = df[df['project_name'] == name]
-            ax.plot(sub_df['timestamp'], sub_df['delta_views'], marker='s', markersize=3, label=name)
+            ax.plot(
+                sub_df['timestamp'], sub_df['delta_views'], 
+                linestyle=style[1], marker=style[2], color=style[0],
+                markersize=4, linewidth=1.5, label=name
+            )
             
-        ax.set_title("Initiative View Growth (Deltas) Over Time", fontsize=14, fontweight='bold', pad=15)
+        ax.set_title("Initiative View Increments Since Launch", fontsize=14, fontweight='bold', pad=15)
         ax.set_xlabel("Time", fontsize=11, labelpad=10)
-        ax.set_ylabel("View Delta (Growth)", fontsize=11, labelpad=10)
+        ax.set_ylabel("View Delta (Growth from Launch)", fontsize=11, labelpad=10)
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d %H:%M'))
         plt.xticks(rotation=30)
         ax.legend(title="Initiatives", bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=9)
         fig.savefig(os.path.join(CHARTS_DIR, "views_over_time.png"), dpi=150, bbox_inches='tight')
         plt.close(fig)
         
-        print("Generated static delta-based PNG charts successfully.")
+        print("Generated static texture-distinct PNG charts successfully.")
     except Exception as e:
         print(f"Error generating static charts: {e}")
 
@@ -160,7 +210,8 @@ def generate_interactive_dashboard():
         df_list = df.to_dict(orient='records')
         
         latest_timestamp = df['timestamp'].max()
-        last_state = load_last_state()
+        last_state = load_json_file(STATE_FILE)
+        baseline = load_json_file(BASELINE_FILE)
         
         table_stats = []
         for p_id, info in last_state.items():
@@ -186,6 +237,15 @@ def generate_interactive_dashboard():
                 "delta_views": latest_delta_views,
                 "state": state,
                 "is_winner": is_winner
+            })
+            
+        # Compile styling arrays to pass to JS
+        js_styles = []
+        for style in STYLES:
+            js_styles.append({
+                "color": style[0],
+                "borderDash": style[3],
+                "pointStyle": style[4]
             })
             
         dashboard_html = f"""<!DOCTYPE html>
@@ -292,7 +352,7 @@ def generate_interactive_dashboard():
 
         .chart-container {{
             position: relative;
-            height: 400px;
+            height: 450px;
             width: 100%;
         }}
 
@@ -348,7 +408,7 @@ def generate_interactive_dashboard():
     <header>
         <div>
             <h1>Jūrmala Initiatives Growth Dashboard</h1>
-            <p style="color: var(--text-secondary); margin-top: 0.25rem;">Monitoring delta changes (growth rate) for 2026 initiatives</p>
+            <p style="color: var(--text-secondary); margin-top: 0.25rem;">Cumulative growth since tracking session launch</p>
         </div>
         <div class="last-update">
             Last Checked: <strong id="lastChecked">{latest_timestamp}</strong>
@@ -357,29 +417,29 @@ def generate_interactive_dashboard():
 
     <div class="grid">
         <div class="card">
-            <h2>Votes Delta <span>Hourly/Interval Growth</span></h2>
+            <h2>Votes Delta <span>Cumulative Growth Since Launch</span></h2>
             <div class="chart-container">
                 <canvas id="votesChart"></canvas>
             </div>
         </div>
 
         <div class="card">
-            <h2>Views Delta <span>Hourly/Interval Growth</span></h2>
+            <h2>Views Delta <span>Cumulative Growth Since Launch</span></h2>
             <div class="chart-container">
                 <canvas id="viewsChart"></canvas>
             </div>
         </div>
 
         <div class="card stats-table-card">
-            <h2>Current Initiatives Standings & Latest Deltas</h2>
+            <h2>Current Initiatives Standings & Growth</h2>
             <div style="overflow-x: auto;">
                 <table>
                     <thead>
                         <tr>
                             <th>Initiative Name</th>
                             <th>Status</th>
-                            <th>Total Votes (Latest Growth)</th>
-                            <th>Total Views (Latest Growth)</th>
+                            <th>Total Votes (Growth Since Launch)</th>
+                            <th>Total Views (Growth Since Launch)</th>
                             <th>Conversion Rate</th>
                         </tr>
                     </thead>
@@ -394,6 +454,7 @@ def generate_interactive_dashboard():
     <script>
         const rawHistoryData = {json.dumps(df_list)};
         const latestStats = {json.dumps(table_stats)};
+        const styles = {json.dumps(js_styles)};
 
         const formatTime = (isoString) => {{
             const d = new Date(isoString);
@@ -405,14 +466,9 @@ def generate_interactive_dashboard():
         
         const initiatives = [...new Set(rawHistoryData.map(d => d.project_name))];
 
-        const colors = [
-            '#38bdf8', '#34d399', '#fb7185', '#f472b6', '#c084fc', 
-            '#a78bfa', '#818cf8', '#60a5fa', '#34d399', '#fbbf24', 
-            '#fb923c', '#f87171', '#a3e635'
-        ];
-
         const createDatasets = (key) => {{
             return initiatives.map((name, index) => {{
+                const style = styles[index % styles.length];
                 const dataPoints = timestamps.map(ts => {{
                     const entry = rawHistoryData.find(d => d.project_name === name && d.timestamp === ts);
                     return entry ? entry[key] : null;
@@ -421,11 +477,13 @@ def generate_interactive_dashboard():
                 return {{
                     label: name,
                     data: dataPoints,
-                    borderColor: colors[index % colors.length],
-                    backgroundColor: colors[index % colors.length] + '22',
+                    borderColor: style.color,
+                    backgroundColor: style.color + '11',
                     borderWidth: 2,
-                    tension: 0.3,
-                    pointRadius: timestamps.length > 1 ? 2 : 5,
+                    borderDash: style.borderDash,
+                    pointStyle: style.pointStyle,
+                    tension: 0.2,
+                    pointRadius: 4,
                     pointHoverRadius: 6
                 }};
             }});
@@ -441,7 +499,8 @@ def generate_interactive_dashboard():
                     labels: {{
                         color: '#94a3b8',
                         font: {{ family: 'Outfit', size: 10 }},
-                        boxWidth: 12
+                        boxWidth: 25,
+                        usePointStyle: true
                     }}
                 }},
                 tooltip: {{
@@ -503,7 +562,6 @@ def generate_interactive_dashboard():
 
 def git_push_updates():
     try:
-        # Check if remote is configured
         check_remote = subprocess.run(
             ["git", "remote"],
             capture_output=True, text=True, check=True
@@ -512,26 +570,23 @@ def git_push_updates():
             print("No git remote configured. Skipping push.")
             return
             
-        # Add files
         subprocess.run(["git", "add", CSV_FILE, STATE_FILE, HTML_FILE, os.path.join(CHARTS_DIR, "*.png")], check=True)
-        
-        # Commit
         subprocess.run(["git", "commit", "-m", f"Auto-update: {datetime.datetime.now().isoformat(timespec='minutes')}"], capture_output=True)
         
-        # Push
+        # Pushing updates (redirect output to prevent blocking)
         print("Pushing updates to GitHub...")
         subprocess.run(["git", "push", "origin", "main"], check=True)
         print("Successfully pushed updates to GitHub.")
     except Exception as e:
-        print(f"Git auto-push skipped or failed: {e}")
+        print(f"Git auto-push skipped or failed (Likely auth required): {e}")
 
-def run_once():
+def run_once(reset_baseline=False):
     ensure_directories()
     timestamp = datetime.datetime.now().isoformat(timespec='minutes')
     print(f"Polling API at {timestamp}...")
     data = fetch_data()
     if data:
-        save_to_csv(data, timestamp)
+        save_to_csv(data, timestamp, reset_baseline)
         generate_static_charts()
         generate_interactive_dashboard()
         git_push_updates()
@@ -544,9 +599,13 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--daemon":
         import time
         print("Starting municipal tracker in daemon mode (10-minute intervals)...")
+        # Reset baseline on daemon startup
+        run_once(reset_baseline=True)
         while True:
-            run_once()
             print("Sleeping for 10 minutes...")
             time.sleep(600)
+            run_once(reset_baseline=False)
     else:
-        run_once()
+        # Check if user asked to reset baseline
+        reset = "--reset" in sys.argv
+        run_once(reset_baseline=reset)
