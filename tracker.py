@@ -4,6 +4,7 @@ import csv
 import json
 import requests
 import datetime
+import subprocess
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import pandas as pd
@@ -69,14 +70,12 @@ def save_to_csv(data, timestamp):
         curr_votes = project.get("vote_count", 0)
         curr_views = project.get("view_count", 0)
         
-        # Calculate delta (growth value since last check)
         if p_id in last_state:
             last_votes = last_state[p_id].get("votes", curr_votes)
             last_views = last_state[p_id].get("views", curr_views)
             delta_votes = max(0, curr_votes - last_votes)
             delta_views = max(0, curr_views - last_views)
         else:
-            # First iteration: delta is 0
             delta_votes = 0
             delta_views = 0
             
@@ -160,15 +159,11 @@ def generate_interactive_dashboard():
         df = pd.read_csv(CSV_FILE)
         df_list = df.to_dict(orient='records')
         
-        # Summary metrics (sum of deltas / current standings)
         latest_timestamp = df['timestamp'].max()
-        
-        # Load absolute current state to display latest total vote and view count in the table
         last_state = load_last_state()
         
         table_stats = []
         for p_id, info in last_state.items():
-            # Find the latest delta for conversion metric or label
             project_deltas = df[df['project_id'] == p_id]
             latest_delta_votes = 0
             latest_delta_views = 0
@@ -199,9 +194,7 @@ def generate_interactive_dashboard():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jūrmala Initiatives Growth Dashboard (2026)</title>
-    <!-- Outfit Font -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {{
@@ -468,21 +461,18 @@ def generate_interactive_dashboard():
             }}
         }};
 
-        // Render Votes Delta Chart
         new Chart(document.getElementById('votesChart'), {{
             type: 'line',
             data: {{ labels, datasets: createDatasets('delta_votes') }},
             options: chartOptions
         }});
 
-        // Render Views Delta Chart
         new Chart(document.getElementById('viewsChart'), {{
             type: 'line',
             data: {{ labels, datasets: createDatasets('delta_views') }},
             options: chartOptions
         }});
 
-        // Render table
         const tbody = document.getElementById('tableBody');
         latestStats.sort((a, b) => b.votes - a.votes);
         latestStats.forEach(item => {{
@@ -511,6 +501,30 @@ def generate_interactive_dashboard():
     except Exception as e:
         print(f"Error generating interactive dashboard: {e}")
 
+def git_push_updates():
+    try:
+        # Check if remote is configured
+        check_remote = subprocess.run(
+            ["git", "remote"],
+            capture_output=True, text=True, check=True
+        )
+        if not check_remote.stdout.strip():
+            print("No git remote configured. Skipping push.")
+            return
+            
+        # Add files
+        subprocess.run(["git", "add", CSV_FILE, STATE_FILE, HTML_FILE, os.path.join(CHARTS_DIR, "*.png")], check=True)
+        
+        # Commit
+        subprocess.run(["git", "commit", "-m", f"Auto-update: {datetime.datetime.now().isoformat(timespec='minutes')}"], capture_output=True)
+        
+        # Push
+        print("Pushing updates to GitHub...")
+        subprocess.run(["git", "push", "origin", "main"], check=True)
+        print("Successfully pushed updates to GitHub.")
+    except Exception as e:
+        print(f"Git auto-push skipped or failed: {e}")
+
 def run_once():
     ensure_directories()
     timestamp = datetime.datetime.now().isoformat(timespec='minutes')
@@ -520,6 +534,7 @@ def run_once():
         save_to_csv(data, timestamp)
         generate_static_charts()
         generate_interactive_dashboard()
+        git_push_updates()
         print("Cycle completed successfully.")
     else:
         print("Polling cycle failed.")
