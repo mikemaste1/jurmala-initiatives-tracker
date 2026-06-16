@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jūrmala Initiatives Growth Dashboard (2026)</title>
+    <!-- Outfit Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent: #38bdf8;
+            --accent-green: #34d399;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            padding: 2rem;
+            min-height: 100vh;
+            background-image: radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.05) 0%, transparent 40%),
+                              radial-gradient(circle at 90% 80%, rgba(52, 211, 153, 0.05) 0%, transparent 40%);
+        }
+
+        header {
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #38bdf8, #34d399);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .last-update {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (min-width: 1024px) {
+            .grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .card:hover {
+            border-color: rgba(56, 189, 248, 0.2);
+        }
+
+        .card h2 {
+            font-size: 1.25rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-weight: 600;
+        }
+
+        .card h2 span {
+            font-size: 0.8rem;
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--accent);
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+        }
+
+        .stats-table-card {
+            grid-column: 1 / -1;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.95rem;
+        }
+
+        th, td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
+        }
+
+        tbody tr:hover {
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .winner-badge {
+            background: rgba(52, 211, 153, 0.15);
+            color: var(--accent-green);
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border: 1px solid rgba(52, 211, 153, 0.2);
+        }
+
+        .delta-badge {
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-left: 0.5rem;
+        }
+        .delta-up {
+            color: var(--accent-green);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div>
+            <h1>Jūrmala Initiatives Growth Dashboard</h1>
+            <p style="color: var(--text-secondary); margin-top: 0.25rem;">Monitoring delta changes (growth rate) for 2026 initiatives</p>
+        </div>
+        <div class="last-update">
+            Last Checked: <strong id="lastChecked">2026-06-16T16:55</strong>
+        </div>
+    </header>
+
+    <div class="grid">
+        <div class="card">
+            <h2>Votes Delta <span>Hourly/Interval Growth</span></h2>
+            <div class="chart-container">
+                <canvas id="votesChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Views Delta <span>Hourly/Interval Growth</span></h2>
+            <div class="chart-container">
+                <canvas id="viewsChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card stats-table-card">
+            <h2>Current Initiatives Standings & Latest Deltas</h2>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Initiative Name</th>
+                            <th>Status</th>
+                            <th>Total Votes (Latest Growth)</th>
+                            <th>Total Views (Latest Growth)</th>
+                            <th>Conversion Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const rawHistoryData = [{"timestamp": "2026-06-16T16:45", "project_id": "T7jGDR8K4B", "project_name": "Vecslocenes pastaigu taka", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": true}, {"timestamp": "2026-06-16T16:45", "project_id": "teL62cUjB5", "project_name": "Piemi\u0146as vieta K\u0101rlim Bardelim", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "c29ThVpT8M", "project_name": "G\u0101j\u0113ju un velo celi\u0146\u0161 Vaivaru stacija - Krastciems", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "R59abyepfW", "project_name": "Majoru un Dzintaru bezmaksas padel tenisa korti", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "XBU7NpRWV5", "project_name": "J\u016brmalnieku tik\u0161an\u0101s un piekrastes mantojuma telpa", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "ZehtNs82ac", "project_name": "Majoru un Dzintaru bezmaksas su\u0146u pastaigu laukums", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "bfhNXUR3VB", "project_name": "Vaivaru me\u017e\u0101", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "a5hDLTe7p4", "project_name": "Inform\u0101cijas stendi apkaim\u0113s", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "Z92tNs82ac", "project_name": "J\u016brmal\u0101, Slok\u0101 - Ietve un velostat\u012bvi pie dzelzce\u013ca stacijas - iestaig\u0101to taku viet\u0101 2", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "ahqDLTe7p4", "project_name": "M\u012blest\u012bbas b\u0101ka J\u016brmal\u0101", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "M2p32qRtb9", "project_name": "J\u016brmal\u0101, Slok\u0101 - nomales asfalt\u0113\u0161ana krustojum\u0101, pagrieziens uz karjeru no ventspils \u0161osejas", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "MGe32qRtb9", "project_name": "J\u016brmal\u0101 Kauguros b\u0113rnu rota\u013cu laukuma papla\u0161in\u0101\u0161ana un pilnveide, apgaismojuma ier\u012bko\u0161ana citam rota\u013cu laukumam Rai\u0146a 81", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "KhrpUybRet", "project_name": "\u0100ra trena\u017eieri Bu\u013c\u013cuciem\u0101 \u2013 veseli un akt\u012bvi j\u016brmalnieki", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "T7jGDR8K4B", "project_name": "Vecslocenes pastaigu taka", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": true}, {"timestamp": "2026-06-16T16:45", "project_id": "teL62cUjB5", "project_name": "Piemi\u0146as vieta K\u0101rlim Bardelim", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "c29ThVpT8M", "project_name": "G\u0101j\u0113ju un velo celi\u0146\u0161 Vaivaru stacija - Krastciems", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "R59abyepfW", "project_name": "Majoru un Dzintaru bezmaksas padel tenisa korti", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "XBU7NpRWV5", "project_name": "J\u016brmalnieku tik\u0161an\u0101s un piekrastes mantojuma telpa", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "ZehtNs82ac", "project_name": "Majoru un Dzintaru bezmaksas su\u0146u pastaigu laukums", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "bfhNXUR3VB", "project_name": "Vaivaru me\u017e\u0101", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "a5hDLTe7p4", "project_name": "Inform\u0101cijas stendi apkaim\u0113s", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "Z92tNs82ac", "project_name": "J\u016brmal\u0101, Slok\u0101 - Ietve un velostat\u012bvi pie dzelzce\u013ca stacijas - iestaig\u0101to taku viet\u0101 2", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "ahqDLTe7p4", "project_name": "M\u012blest\u012bbas b\u0101ka J\u016brmal\u0101", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "M2p32qRtb9", "project_name": "J\u016brmal\u0101, Slok\u0101 - nomales asfalt\u0113\u0161ana krustojum\u0101, pagrieziens uz karjeru no ventspils \u0161osejas", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "MGe32qRtb9", "project_name": "J\u016brmal\u0101 Kauguros b\u0113rnu rota\u013cu laukuma papla\u0161in\u0101\u0161ana un pilnveide, apgaismojuma ier\u012bko\u0161ana citam rota\u013cu laukumam Rai\u0146a 81", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:45", "project_id": "KhrpUybRet", "project_name": "\u0100ra trena\u017eieri Bu\u013c\u013cuciem\u0101 \u2013 veseli un akt\u012bvi j\u016brmalnieki", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:55", "project_id": "T7jGDR8K4B", "project_name": "Vecslocenes pastaigu taka", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": true}, {"timestamp": "2026-06-16T16:55", "project_id": "teL62cUjB5", "project_name": "Piemi\u0146as vieta K\u0101rlim Bardelim", "delta_votes": 0, "delta_views": 2, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:55", "project_id": "c29ThVpT8M", "project_name": "G\u0101j\u0113ju un velo celi\u0146\u0161 Vaivaru stacija - Krastciems", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:55", "project_id": "R59abyepfW", "project_name": "Majoru un Dzintaru bezmaksas padel tenisa korti", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:55", "project_id": "XBU7NpRWV5", "project_name": "J\u016brmalnieku tik\u0161an\u0101s un piekrastes mantojuma telpa", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:55", "project_id": "ZehtNs82ac", "project_name": "Majoru un Dzintaru bezmaksas su\u0146u pastaigu laukums", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:55", "project_id": "bfhNXUR3VB", "project_name": "Vaivaru me\u017e\u0101", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:55", "project_id": "a5hDLTe7p4", "project_name": "Inform\u0101cijas stendi apkaim\u0113s", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:55", "project_id": "Z92tNs82ac", "project_name": "J\u016brmal\u0101, Slok\u0101 - Ietve un velostat\u012bvi pie dzelzce\u013ca stacijas - iestaig\u0101to taku viet\u0101 2", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:55", "project_id": "ahqDLTe7p4", "project_name": "M\u012blest\u012bbas b\u0101ka J\u016brmal\u0101", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:55", "project_id": "M2p32qRtb9", "project_name": "J\u016brmal\u0101, Slok\u0101 - nomales asfalt\u0113\u0161ana krustojum\u0101, pagrieziens uz karjeru no ventspils \u0161osejas", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:55", "project_id": "MGe32qRtb9", "project_name": "J\u016brmal\u0101 Kauguros b\u0113rnu rota\u013cu laukuma papla\u0161in\u0101\u0161ana un pilnveide, apgaismojuma ier\u012bko\u0161ana citam rota\u013cu laukumam Rai\u0146a 81", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"timestamp": "2026-06-16T16:55", "project_id": "KhrpUybRet", "project_name": "\u0100ra trena\u017eieri Bu\u013c\u013cuciem\u0101 \u2013 veseli un akt\u012bvi j\u016brmalnieki", "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}];
+        const latestStats = [{"project_name": "Vecslocenes pastaigu taka", "votes": 995, "views": 12192, "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": true}, {"project_name": "Piemi\u0146as vieta K\u0101rlim Bardelim", "votes": 643, "views": 9309, "delta_votes": 0, "delta_views": 2, "state": "in_voting", "is_winner": false}, {"project_name": "G\u0101j\u0113ju un velo celi\u0146\u0161 Vaivaru stacija - Krastciems", "votes": 287, "views": 2477, "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"project_name": "Majoru un Dzintaru bezmaksas padel tenisa korti", "votes": 234, "views": 2817, "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"project_name": "J\u016brmalnieku tik\u0161an\u0101s un piekrastes mantojuma telpa", "votes": 142, "views": 2637, "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"project_name": "Majoru un Dzintaru bezmaksas su\u0146u pastaigu laukums", "votes": 122, "views": 1086, "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"project_name": "Vaivaru me\u017e\u0101", "votes": 114, "views": 1154, "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"project_name": "Inform\u0101cijas stendi apkaim\u0113s", "votes": 110, "views": 1583, "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"project_name": "J\u016brmal\u0101, Slok\u0101 - Ietve un velostat\u012bvi pie dzelzce\u013ca stacijas - iestaig\u0101to taku viet\u0101 2", "votes": 108, "views": 1062, "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"project_name": "M\u012blest\u012bbas b\u0101ka J\u016brmal\u0101", "votes": 88, "views": 922, "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"project_name": "J\u016brmal\u0101, Slok\u0101 - nomales asfalt\u0113\u0161ana krustojum\u0101, pagrieziens uz karjeru no ventspils \u0161osejas", "votes": 86, "views": 692, "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"project_name": "J\u016brmal\u0101 Kauguros b\u0113rnu rota\u013cu laukuma papla\u0161in\u0101\u0161ana un pilnveide, apgaismojuma ier\u012bko\u0161ana citam rota\u013cu laukumam Rai\u0146a 81", "votes": 72, "views": 1220, "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}, {"project_name": "\u0100ra trena\u017eieri Bu\u013c\u013cuciem\u0101 \u2013 veseli un akt\u012bvi j\u016brmalnieki", "votes": 62, "views": 1133, "delta_votes": 0, "delta_views": 0, "state": "in_voting", "is_winner": false}];
+
+        const formatTime = (isoString) => {
+            const d = new Date(isoString);
+            return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        };
+
+        const timestamps = [...new Set(rawHistoryData.map(d => d.timestamp))].sort();
+        const labels = timestamps.map(formatTime);
+        
+        const initiatives = [...new Set(rawHistoryData.map(d => d.project_name))];
+
+        const colors = [
+            '#38bdf8', '#34d399', '#fb7185', '#f472b6', '#c084fc', 
+            '#a78bfa', '#818cf8', '#60a5fa', '#34d399', '#fbbf24', 
+            '#fb923c', '#f87171', '#a3e635'
+        ];
+
+        const createDatasets = (key) => {
+            return initiatives.map((name, index) => {
+                const dataPoints = timestamps.map(ts => {
+                    const entry = rawHistoryData.find(d => d.project_name === name && d.timestamp === ts);
+                    return entry ? entry[key] : null;
+                });
+
+                return {
+                    label: name,
+                    data: dataPoints,
+                    borderColor: colors[index % colors.length],
+                    backgroundColor: colors[index % colors.length] + '22',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    pointRadius: timestamps.length > 1 ? 2 : 5,
+                    pointHoverRadius: 6
+                };
+            });
+        };
+
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom',
+                    labels: {
+                        color: '#94a3b8',
+                        font: { family: 'Outfit', size: 10 },
+                        boxWidth: 12
+                    }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: '#94a3b8', font: { family: 'Outfit' } }
+                },
+                y: {
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: '#94a3b8', font: { family: 'Outfit' } }
+                }
+            }
+        };
+
+        // Render Votes Delta Chart
+        new Chart(document.getElementById('votesChart'), {
+            type: 'line',
+            data: { labels, datasets: createDatasets('delta_votes') },
+            options: chartOptions
+        });
+
+        // Render Views Delta Chart
+        new Chart(document.getElementById('viewsChart'), {
+            type: 'line',
+            data: { labels, datasets: createDatasets('delta_views') },
+            options: chartOptions
+        });
+
+        // Render table
+        const tbody = document.getElementById('tableBody');
+        latestStats.sort((a, b) => b.votes - a.votes);
+        latestStats.forEach(item => {
+            const convRate = item.views > 0 ? ((item.votes / item.views) * 100).toFixed(1) + '%' : '0%';
+            
+            const deltaVotesText = item.delta_votes > 0 ? ` (+${item.delta_votes})` : ' (+0)';
+            const deltaViewsText = item.delta_views > 0 ? ` (+${item.delta_views})` : ' (+0)';
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="font-weight: 600;">${item.project_name} ${item.is_winner ? '<span class="winner-badge">Winner</span>' : ''}</td>
+                <td><span style="color: var(--text-secondary); font-size: 0.85rem;">${item.state}</span></td>
+                <td><span style="font-weight: 600; color: var(--accent-green);">${item.votes.toLocaleString()}</span><span class="delta-badge delta-up">${deltaVotesText}</span></td>
+                <td><span style="color: var(--accent);">${item.views.toLocaleString()}</span><span class="delta-badge delta-up">${deltaViewsText}</span></td>
+                <td>${convRate}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    </script>
+</body>
+</html>
