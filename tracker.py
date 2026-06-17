@@ -80,12 +80,10 @@ def save_json_file(filepath, data):
 def save_to_csv(data, timestamp, reset_baseline=False):
     ensure_directories()
     
-    # Check if we need to reset/create baseline
     baseline = {}
     if not reset_baseline:
         baseline = load_json_file(BASELINE_FILE)
         
-    # If baseline is empty (first run or reset), establish it now
     if not baseline:
         for project in data:
             p_id = project.get("id", "")
@@ -96,7 +94,6 @@ def save_to_csv(data, timestamp, reset_baseline=False):
             }
         save_json_file(BASELINE_FILE, baseline)
         print("Established new launch baseline.")
-        # If baseline is reset, clear old CSV to prevent mixed sessions
         if os.path.isfile(CSV_FILE):
             os.remove(CSV_FILE)
             
@@ -110,7 +107,6 @@ def save_to_csv(data, timestamp, reset_baseline=False):
         curr_votes = project.get("vote_count", 0)
         curr_views = project.get("view_count", 0)
         
-        # Calculate delta from tracker launch baseline
         proj_baseline = baseline.get(p_id, {"votes": curr_votes, "views": curr_views})
         base_votes = proj_baseline.get("votes", curr_votes)
         base_views = proj_baseline.get("views", curr_views)
@@ -118,7 +114,6 @@ def save_to_csv(data, timestamp, reset_baseline=False):
         delta_votes = max(0, curr_votes - base_votes)
         delta_views = max(0, curr_views - base_views)
         
-        # Keep track of latest absolute values for table display
         new_state[p_id] = {
             "name": name,
             "votes": curr_votes,
@@ -211,7 +206,6 @@ def generate_interactive_dashboard():
         
         latest_timestamp = df['timestamp'].max()
         last_state = load_json_file(STATE_FILE)
-        baseline = load_json_file(BASELINE_FILE)
         
         table_stats = []
         for p_id, info in last_state.items():
@@ -239,7 +233,6 @@ def generate_interactive_dashboard():
                 "is_winner": is_winner
             })
             
-        # Compile styling arrays to pass to JS
         js_styles = []
         for style in STYLES:
             js_styles.append({
@@ -277,23 +270,37 @@ def generate_interactive_dashboard():
             font-family: 'Outfit', sans-serif;
             background-color: var(--bg-color);
             color: var(--text-primary);
-            padding: 2rem;
+            padding: 1rem;
             min-height: 100vh;
             background-image: radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.05) 0%, transparent 40%),
                               radial-gradient(circle at 90% 80%, rgba(52, 211, 153, 0.05) 0%, transparent 40%);
         }}
 
+        @media (min-width: 640px) {{
+            body {{
+                padding: 2rem;
+            }}
+        }}
+
         header {{
             margin-bottom: 2rem;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            gap: 1rem;
             border-bottom: 1px solid var(--border-color);
             padding-bottom: 1.5rem;
         }}
 
+        @media (min-width: 768px) {{
+            header {{
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
+            }}
+        }}
+
         h1 {{
-            font-size: 2.2rem;
+            font-size: 2rem;
             font-weight: 700;
             background: linear-gradient(135deg, #38bdf8, #34d399);
             -webkit-background-clip: text;
@@ -325,11 +332,15 @@ def generate_interactive_dashboard():
             border-radius: 16px;
             padding: 1.5rem;
             box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
-            transition: transform 0.2s, border-color 0.2s;
+            transition: border-color 0.2s;
         }}
 
         .card:hover {{
             border-color: rgba(56, 189, 248, 0.2);
+        }}
+
+        .card h2, .card h3 {{
+            font-weight: 600;
         }}
 
         .card h2 {{
@@ -338,7 +349,6 @@ def generate_interactive_dashboard():
             display: flex;
             align-items: center;
             justify-content: space-between;
-            font-weight: 600;
         }}
 
         .card h2 span {{
@@ -350,9 +360,125 @@ def generate_interactive_dashboard():
             border: 1px solid rgba(56, 189, 248, 0.2);
         }}
 
+        /* Controls Panel styling */
+        .controls-card {{
+            margin-bottom: 2rem;
+        }}
+
+        .controls-grid {{
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }}
+
+        @media (min-width: 768px) {{
+            .controls-grid {{
+                grid-template-columns: 1fr 2fr;
+            }}
+        }}
+
+        .control-group h3 {{
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.75rem;
+        }}
+
+        .btn-group {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }}
+
+        .btn {{
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }}
+
+        .btn:hover {{
+            background: rgba(56, 189, 248, 0.1);
+            border-color: rgba(56, 189, 248, 0.3);
+        }}
+
+        .btn.active {{
+            background: var(--accent);
+            border-color: var(--accent);
+            color: var(--bg-color);
+            font-weight: 600;
+        }}
+
+        .btn-small {{
+            background: transparent;
+            border: none;
+            color: var(--accent);
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-family: inherit;
+            margin-left: 0.5rem;
+            text-decoration: underline;
+        }}
+
+        .btn-small:hover {{
+            color: var(--text-primary);
+        }}
+
+        .checkboxes-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.5rem;
+            max-height: 150px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            background: rgba(0, 0, 0, 0.2);
+        }}
+
+        /* Custom scrollbar for checklist container */
+        .checkboxes-grid::-webkit-scrollbar {{
+            width: 6px;
+        }}
+        .checkboxes-grid::-webkit-scrollbar-track {{
+            background: transparent;
+        }}
+        .checkboxes-grid::-webkit-scrollbar-thumb {{
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 99px;
+        }}
+
+        .checkbox-label {{
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            user-select: none;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: background 0.15s, color 0.15s;
+        }}
+
+        .checkbox-label:hover {{
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-primary);
+        }}
+
+        .checkbox-label input {{
+            accent-color: var(--accent);
+            cursor: pointer;
+        }}
+
         .chart-container {{
             position: relative;
-            height: 450px;
+            height: 380px;
             width: 100%;
         }}
 
@@ -415,6 +541,34 @@ def generate_interactive_dashboard():
         </div>
     </header>
 
+    <!-- Controls Panel -->
+    <div class="card controls-card">
+        <div class="controls-grid">
+            <div class="control-group">
+                <h3>Time Interval</h3>
+                <div class="btn-group">
+                    <button class="btn active" onclick="setTimeWindow('all', this)">All Time</button>
+                    <button class="btn" onclick="setTimeWindow('24h', this)">24 Hours</button>
+                    <button class="btn" onclick="setTimeWindow('12h', this)">12 Hours</button>
+                    <button class="btn" onclick="setTimeWindow('6h', this)">6 Hours</button>
+                    <button class="btn" onclick="setTimeWindow('1h', this)">1 Hour</button>
+                </div>
+            </div>
+            <div class="control-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <h3>Select Initiatives to Display</h3>
+                    <div>
+                        <button class="btn-small" onclick="toggleAllInitiatives(true)">Select All</button>
+                        <button class="btn-small" onclick="toggleAllInitiatives(false)">Clear All</button>
+                    </div>
+                </div>
+                <div class="checkboxes-grid" id="checkboxesGrid">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="grid">
         <div class="card">
             <h2>Votes Delta <span>Cumulative Growth Since Launch</span></h2>
@@ -431,7 +585,7 @@ def generate_interactive_dashboard():
         </div>
 
         <div class="card stats-table-card">
-            <h2>Current Initiatives Standings & Growth</h2>
+            <h2>Current Standing & Growth Details</h2>
             <div style="overflow-x: auto;">
                 <table>
                     <thead>
@@ -461,22 +615,34 @@ def generate_interactive_dashboard():
             return `${{String(d.getMonth() + 1).padStart(2, '0')}}-${{String(d.getDate()).padStart(2, '0')}} ${{String(d.getHours()).padStart(2, '0')}}:${{String(d.getMinutes()).padStart(2, '0')}}`;
         }};
 
+        // Extract datasets metadata
         const timestamps = [...new Set(rawHistoryData.map(d => d.timestamp))].sort();
-        const labels = timestamps.map(formatTime);
-        
         const initiatives = [...new Set(rawHistoryData.map(d => d.project_name))];
+
+        // Global states for filters
+        let selectedTimeWindow = 'all';
+        const activeInitiatives = new Set(initiatives);
+
+        // Populate checkboxes
+        const checkboxContainer = document.getElementById('checkboxesGrid');
+        initiatives.forEach((name, index) => {{
+            const style = styles[index % styles.length];
+            const label = document.createElement('label');
+            label.className = 'checkbox-label';
+            label.innerHTML = `
+                <input type="checkbox" checked value="${{name}}" onchange="toggleInitiative('${{name}}', this.checked)">
+                <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background-color:${{style.color}};"></span>
+                <span style="text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${{name}}</span>
+            `;
+            checkboxContainer.appendChild(label);
+        }});
 
         const createDatasets = (key) => {{
             return initiatives.map((name, index) => {{
                 const style = styles[index % styles.length];
-                const dataPoints = timestamps.map(ts => {{
-                    const entry = rawHistoryData.find(d => d.project_name === name && d.timestamp === ts);
-                    return entry ? entry[key] : null;
-                }});
-
                 return {{
                     label: name,
-                    data: dataPoints,
+                    data: [], // populated during update
                     borderColor: style.color,
                     backgroundColor: style.color + '11',
                     borderWidth: 2,
@@ -494,14 +660,7 @@ def generate_interactive_dashboard():
             maintainAspectRatio: false,
             plugins: {{
                 legend: {{
-                    display: true,
-                    position: 'bottom',
-                    labels: {{
-                        color: '#94a3b8',
-                        font: {{ family: 'Outfit', size: 10 }},
-                        boxWidth: 25,
-                        usePointStyle: true
-                    }}
+                    display: false // Turned off default legend because we have the filter checkbox list!
                 }},
                 tooltip: {{
                     mode: 'index',
@@ -520,18 +679,99 @@ def generate_interactive_dashboard():
             }}
         }};
 
-        new Chart(document.getElementById('votesChart'), {{
+        // Render Votes Delta Chart
+        const votesChart = new Chart(document.getElementById('votesChart'), {{
             type: 'line',
-            data: {{ labels, datasets: createDatasets('delta_votes') }},
+            data: {{ labels: [], datasets: createDatasets('delta_votes') }},
             options: chartOptions
         }});
 
-        new Chart(document.getElementById('viewsChart'), {{
+        // Render Views Delta Chart
+        const viewsChart = new Chart(document.getElementById('viewsChart'), {{
             type: 'line',
-            data: {{ labels, datasets: createDatasets('delta_views') }},
+            data: {{ labels: [], datasets: createDatasets('delta_views') }},
             options: chartOptions
         }});
 
+        // Update function for both charts
+        function updateCharts() {{
+            let filteredTimestamps = [...timestamps];
+            
+            if (selectedTimeWindow !== 'all') {{
+                const now = new Date();
+                let hoursLimit = 24;
+                if (selectedTimeWindow === '1h') hoursLimit = 1;
+                else if (selectedTimeWindow === '6h') hoursLimit = 6;
+                else if (selectedTimeWindow === '12h') hoursLimit = 12;
+                
+                const cutoff = new Date(now.getTime() - hoursLimit * 60 * 60 * 1000);
+                filteredTimestamps = timestamps.filter(ts => new Date(ts) >= cutoff);
+            }}
+
+            const newLabels = filteredTimestamps.map(formatTime);
+            votesChart.data.labels = newLabels;
+            viewsChart.data.labels = newLabels;
+
+            initiatives.forEach((name, index) => {{
+                // Get filtered values
+                const dataPointsVotes = filteredTimestamps.map(ts => {{
+                    const entry = rawHistoryData.find(d => d.project_name === name && d.timestamp === ts);
+                    return entry ? entry.delta_votes : 0;
+                }});
+
+                const dataPointsViews = filteredTimestamps.map(ts => {{
+                    const entry = rawHistoryData.find(d => d.project_name === name && d.timestamp === ts);
+                    return entry ? entry.delta_views : 0;
+                }});
+
+                votesChart.data.datasets[index].data = dataPointsVotes;
+                viewsChart.data.datasets[index].data = dataPointsViews;
+
+                // Set visibility
+                const isVisible = activeInitiatives.has(name);
+                votesChart.setDatasetVisibility(index, isVisible);
+                viewsChart.setDatasetVisibility(index, isVisible);
+            }});
+
+            votesChart.update();
+            viewsChart.update();
+        }}
+
+        // Controls interactions
+        function setTimeWindow(windowType, element) {{
+            selectedTimeWindow = windowType;
+            
+            // Toggle active state classes
+            const btns = element.parentElement.querySelectorAll('.btn');
+            btns.forEach(b => b.classList.remove('active'));
+            element.classList.add('active');
+            
+            updateCharts();
+        }}
+
+        function toggleInitiative(name, isChecked) {{
+            if (isChecked) {{
+                activeInitiatives.add(name);
+            }} else {{
+                activeInitiatives.delete(name);
+            }}
+            updateCharts();
+        }}
+
+        function toggleAllInitiatives(selectVal) {{
+            const checkboxes = checkboxContainer.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(cb => {{
+                cb.checked = selectVal;
+                if (selectVal) {{
+                    activeInitiatives.add(cb.value);
+                }} else {{
+                    activeInitiatives.delete(cb.value);
+                }}
+            }});
+            updateCharts();
+        }}
+
+        // Render standings table
         const tbody = document.getElementById('tableBody');
         latestStats.sort((a, b) => b.votes - a.votes);
         latestStats.forEach(item => {{
@@ -550,6 +790,9 @@ def generate_interactive_dashboard():
             `;
             tbody.appendChild(tr);
         }});
+
+        // Run initial render
+        updateCharts();
     </script>
 </body>
 </html>
@@ -573,7 +816,6 @@ def git_push_updates():
         subprocess.run(["git", "add", CSV_FILE, STATE_FILE, HTML_FILE, os.path.join(CHARTS_DIR, "*.png")], check=True)
         subprocess.run(["git", "commit", "-m", f"Auto-update: {datetime.datetime.now().isoformat(timespec='minutes')}"], capture_output=True)
         
-        # Pushing updates (redirect output to prevent blocking)
         print("Pushing updates to GitHub...")
         subprocess.run(["git", "push", "origin", "main"], check=True)
         print("Successfully pushed updates to GitHub.")
@@ -599,13 +841,11 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--daemon":
         import time
         print("Starting municipal tracker in daemon mode (10-minute intervals)...")
-        # Reset baseline on daemon startup
         run_once(reset_baseline=True)
         while True:
             print("Sleeping for 10 minutes...")
             time.sleep(600)
             run_once(reset_baseline=False)
     else:
-        # Check if user asked to reset baseline
         reset = "--reset" in sys.argv
         run_once(reset_baseline=reset)
